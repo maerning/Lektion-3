@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Lauschen am Fenster – Lektion 3</title></head>
+<body><script src="kit.js"></script><script src="l3.js"></script>
+<script>
+(async () => {
+const {W, H, ctx} = K;
+const IMG = await K.load({bg:'img/huette.jpg', davus:'img/davus.png', pom:'img/pomponius.png'});
+const WIN = {x: 806, y: 276, w: 222, h: 126};          // Glasfläche des Fensters
+const STEPS = 10, X0 = 130, X1 = 700, GROUND = 600;
+const PERS = ['ich', 'du', 'er / sie / es', 'wir', 'ihr', 'sie (Pl.)'];
+const BTN = PERS.map((p, i) => ({x: 22 + i * 208, y: 622, w: 196, h: 82, i}));
+let state = 'title', deck, q, step, hearts, phase, phaseT, answered, fb, t0, davX, caught, startTime, errors, score;
+
+function newPhase(p) {
+  phase = p;
+  phaseT = p === 'ruhig' ? 3.5 + Math.random() * 3.5 : p === 'warn' ? 1.1 : 1.5;
+  if (p === 'warn') K.sfx.tick();
+  if (p === 'schaut') K.sfx.honk();
+}
+function next() {
+  if (!deck.length) deck = L3.shuffle(L3.SAETZE.slice());
+  const s = deck.pop();
+  q = {lat: s[0], verb: s[1], p: s[2], de: s[3]}; answered = null; fb = null;
+}
+function start() {
+  deck = L3.shuffle(L3.SAETZE.slice()); step = 0; hearts = 3; davX = X0; caught = 0; errors = []; score = 0;
+  state = 'play'; K.clearFx(); K.musicOn = true; K.music(...K.MEL.geheim, .2); newPhase('ruhig'); next(); startTime = performance.now();
+}
+function erwischt(msg) {
+  hearts--; caught = 1.2; K.sfx.wrong();
+  K.float(davX, GROUND - 260, msg, '#ff4d6d', 34);
+  if (hearts <= 0) { state = 'lost'; t0 = performance.now(); K.musicOn = false; }
+}
+function answer(i) {
+  if (answered !== null || state !== 'play') return;
+  if (phase === 'schaut') { if (caught <= 0) erwischt('Erwischt! Warte, bis er weg ist!'); return; }
+  answered = i;
+  if (i === q.p) {
+    step++; score += 10; K.sfx.right(); K.confetti(BTN[i].x + 98, BTN[i].y, 20);
+    fb = {ok: true, t: 1.6};
+    if (step >= STEPS) setTimeout(() => { state = 'win'; t0 = performance.now(); K.musicOn = false; K.sfx.win(); K.coins(W / 2, 300, 40); }, 1300);
+    else setTimeout(() => { if (state === 'play') next(); }, 1600);
+  } else {
+    errors.push(q); fb = {ok: false, t: 2.6};
+    K.sfx.bonk(); K.float(davX, GROUND - 260, 'Knack! Ein Zweig!', '#ff4d6d', 34);
+    newPhase('schaut'); erwischt('Pomponius hört etwas!');
+    setTimeout(() => { if (state === 'play') next(); }, 2600);
+  }
+}
+K.onTap = (x, y) => {
+  if (state === 'title') { start(); return; }
+  if (state !== 'play') { if (performance.now() - t0 > 1200) start(); return; }
+  for (const b of BTN) if (K.hit(x, y, b)) answer(b.i);
+};
+K.onKey = e => {
+  if (state !== 'play') { if (['Space', 'Enter'].includes(e.code)) K.onTap(-1, -1); return; }
+  const n = '123456'.indexOf(e.key); if (n >= 0) answer(n);
+};
+
+function bubble() {
+  // Sprechblase aus dem Fenster
+  const bx = 250, by = 70, bw = 560, bh = 150;
+  ctx.save();
+  K.rr(bx, by, bw, bh, 30); ctx.fillStyle = 'rgba(255,250,240,.97)'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = '#d4a017'; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx + bw - 60, by + bh - 3); ctx.lineTo(WIN.x + 20, WIN.y + 10); ctx.lineTo(bx + bw - 130, by + bh - 3); ctx.closePath();
+  ctx.fillStyle = 'rgba(255,250,240,.97)'; ctx.fill();
+  ctx.restore();
+  K.text('Aus dem Fenster hörst du …', bx + bw / 2, by + 28, 22, '#6b4f2a', {weight: 500});
+  // lateinischer Satz, Verb hervorgehoben
+  const words = q.lat.split(' '); ctx.font = `700 40px ${K.FONT}`;
+  let size = K.fit(q.lat, bw - 40, 40); ctx.font = `700 ${size}px ${K.FONT}`;
+  let x = bx + bw / 2 - ctx.measureText(q.lat).width / 2;
+  for (const w of words) {
+    const isV = w.replace(/[.,!?]/g, '') === q.verb;
+    const ww = ctx.measureText(w + ' ').width;
+    if (isV) { K.rr(x - 6, by + 52, ctx.measureText(w.replace(/[.,!?]/g, '')).width + 12, size + 14, 10); ctx.fillStyle = '#ffd23f'; ctx.fill(); }
+    K.text(w, x, by + 60 + size / 2, size, '#7d0f1c', {align: 'left'}); ctx.font = `700 ${size}px ${K.FONT}`;
+    x += ww;
+  }
+  if (fb && fb.ok) K.text('„' + q.de + '“', bx + bw / 2, by + 125, K.fit('„' + q.de + '“', bw - 40, 26, 500), '#1e7a46', {weight: 500});
+  else if (fb && !fb.ok) K.text(q.verb + ' → ' + PERS[q.p] + '  (' + L3.PL[q.p] + ')', bx + bw / 2, by + 125, 26, '#d62839');
+  else K.text('Wer ist gemeint? Achte auf die Endung!', bx + bw / 2, by + 125, 24, '#3b2a1a', {weight: 500});
+}
+function windowScene(t) {
+  // Licht flackert bei Warnung, Pomponius schaut bei „schaut“
+  if (phase === 'warn') { ctx.fillStyle = `rgba(255,240,150,${.3 + .3 * Math.sin(t * 40)})`; ctx.fillRect(WIN.x, WIN.y, WIN.w, WIN.h); }
+  if (phase === 'schaut' || caught > 0) {
+    ctx.save(); ctx.beginPath(); ctx.rect(WIN.x, WIN.y, WIN.w, WIN.h); ctx.clip();
+    const im = IMG.pom, sw = 190, sh = 150;
+    ctx.drawImage(im, 20, 0, sw, sh, WIN.x + WIN.w / 2 - 95, WIN.y + 8, sw, sh);
+    ctx.restore();
+    K.text('!', WIN.x + WIN.w + 20, WIN.y - 10, 70, '#ff4d6d', {stroke: '#fff', sw: 8});
+  }
+}
+function lamp() {
+  const col = phase === 'schaut' ? '#ff4d6d' : phase === 'warn' ? '#ffb020' : '#2ecc71';
+  const txt = phase === 'schaut' ? 'Pomponius schaut! Nicht bewegen!' : phase === 'warn' ? 'Achtung …' : 'Die Luft ist rein – antworte!';
+  K.rr(720, 14, 410, 50, 25); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(748, 39, 15, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
+  K.text(txt, 938, 40, K.fit(txt, 350, 24), '#fff');
+}
+
+K.loop((dt, t) => {
+  ctx.drawImage(IMG.bg, 0, 0, W, H);
+  if (state === 'play') {
+    phaseT -= dt; caught = Math.max(0, caught - dt);
+    if (phaseT <= 0) newPhase(phase === 'ruhig' ? 'warn' : phase === 'warn' ? 'schaut' : 'ruhig');
+    if (fb) fb.t -= dt;
+    davX += ((X0 + (X1 - X0) * step / STEPS) - davX) * Math.min(1, dt * 3);
+  }
+  if (state !== 'title') windowScene(t);
+  // Davus
+  const bob = state === 'play' && Math.abs(davX - (X0 + (X1 - X0) * step / STEPS)) > 3 ? Math.sin(t * 14) * 5 : 0;
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(davX, GROUND, 60, 12, 0, 0, Math.PI * 2); ctx.fill();
+  K.drawH(IMG.davus, davX, GROUND + bob, 230, true, caught > 0 ? 'brightness(1.4) saturate(.6)' : null);
+
+  if (state === 'play') {
+    bubble(); lamp();
+    // Fortschritt
+    K.rr(72, 14, 300, 50, 25); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill();
+    for (let i = 0; i < 3; i++) K.heart(100 + i * 40, 40, i < hearts);
+    K.text('Schritt ' + step + ' / ' + STEPS, 297, 40, 24, '#ffd23f');
+    BTN.forEach(b => K.button(b, PERS[b.i], answered === null ? (phase === 'schaut' ? 'dim' : null) : (b.i === q.p ? 'ok' : b.i === answered ? 'bad' : 'dim'), {size: 30}));
+    if (phase === 'schaut' && answered === null) {
+      K.rr(22, 616, 1236, 94, 24); ctx.fillStyle = '#7d0f1c'; ctx.fill();
+      K.text('Pssst! Pomponius schaut aus dem Fenster – warte kurz!', W / 2, 663, 34, '#fff');
+    }
+    if (!K.focused()) K.text('Klicke ins Spiel, um zu spielen!', W / 2, 590, 26, '#fff', {stroke: '#000', sw: 6});
+  }
+  K.drawFx(dt);
+
+  if (state === 'title') {
+    K.panel(900, 560);
+    K.title('LAUSCHEN AM FENSTER', 140, 60);
+    K.text('Pomponius und Narcissus schmieden in der Hütte einen Plan.', W / 2, 225, 28, '#3b2a1a', {weight: 500});
+    K.text('Davus will ihn belauschen und schleicht sich zum Fenster.', W / 2, 265, 28, '#3b2a1a', {weight: 500});
+    K.text('Wer ist in dem Satz gemeint? Tippe die richtige Person:', W / 2, 330, 28, '#7d0f1c');
+    K.text('ich · du · er/sie/es · wir · ihr · sie', W / 2, 372, 30, '#1f4e8c');
+    K.text('Richtig = Davus schleicht einen Schritt weiter.', W / 2, 430, 26, '#3b2a1a', {weight: 500});
+    K.text('Aber Vorsicht: Wenn Pomponius aus dem Fenster schaut – nicht tippen!', W / 2, 468, 26, '#d62839');
+    K.blink('Tippe, um zu starten!', 560, 34);
+  }
+  if (state === 'win' || state === 'lost') {
+    const win = state === 'win';
+    K.panel(940, 560);
+    K.title(win ? 'PLAN BELAUSCHT!' : 'ERWISCHT!', 150, 64, win ? '#ffd23f' : '#ff8a8a');
+    if (win) {
+      const sec = Math.round((performance.now() - startTime) / 1000);
+      K.text('Davus hat alles gehört: Sie wollen Incitatus töten!', W / 2, 235, 30, '#3b2a1a');
+      K.text('Schnell, warne die Freunde!', W / 2, 280, 30, '#7d0f1c');
+      K.text('Zeit: ' + sec + ' s   ·   Fehler: ' + errors.length, W / 2, 340, 30, '#1f4e8c');
+    } else {
+      K.text('Pomponius hat Davus entdeckt. Versuch es noch einmal!', W / 2, 240, 30, '#3b2a1a');
+    }
+    if (errors.length) {
+      K.text('Übe noch einmal:', W / 2, 400, 26, '#6b4f2a', {weight: 500});
+      const e = errors.slice(-3).map(q => q.verb + ' = ' + PERS[q.p]).join('   ·   ');
+      K.text(e, W / 2, 440, K.fit(e, 860, 28), '#d62839');
+    }
+    K.blink('Tippe für eine neue Runde!', 560, 32);
+  }
+});
+window.__game = {start, answer, get q() { return q; }, get state() { return state; }, set phase(p) { newPhase(p); }};
+})();
+</script>
+</body></html>

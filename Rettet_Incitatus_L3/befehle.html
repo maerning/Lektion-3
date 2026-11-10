@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Pomponius befiehlt – Lektion 3</title></head>
+<body><script src="kit.js"></script><script src="l3.js"></script>
+<script>
+(async () => {
+const {W, H, ctx} = K;
+const IMG = await K.load({bg:'img/stall.jpg', pom:'img/pomponius.png', mar:'img/marcipor.png', pse:'img/pseudolus.png'});
+const ROUND = 16, GROUND = 566;
+const FIG = {M: {x: 760, im: 'mar', name: 'Marcipor'}, P: {x: 1070, im: 'pse', name: 'Pseudolus'}};
+const BTN = [
+  {k: 'M', x: 40, y: 622, w: 290, h: 80, label: 'Marcipor'},
+  {k: 'P', x: 350, y: 622, w: 290, h: 80, label: 'Pseudolus'},
+  {k: 'B', x: 660, y: 622, w: 290, h: 80, label: 'beide (servi)'},
+  {k: 'N', x: 970, y: 622, w: 270, h: 80, label: 'kein Befehl'}];
+// [Imperativ-Stamm, 3. Sg., 2. Sg., Zusatz]
+const VB = [['labora','laborat','laboras',''], ['propera','properat','properas',''], ['tace','tacet','taces',''], ['sede','sedet','sedes','hic '],
+  ['veni','venit','venis',''], ['audi','audit','audis',''], ['exspecta','exspectat','exspectas','hic '], ['sta','stat','stas','hic '],
+  ['pare','paret','pares',''], ['specta','spectat','spectas',''], ['clama','clamat','clamas',''], ['ride','ridet','rides',''],
+  ['para','parat','paras','frumentum '], ['veni','venit','venis','statim '], ['labora','laborat','laboras','bene ']];
+const cap = s => s[0].toUpperCase() + s.slice(1);
+function befehl() {
+  const v = L3.pick(VB), r = Math.random(), z = v[3];
+  const imp = (z ? z : '') + v[0];
+  if (r < .3) { const a = Math.random() < .5; return {k: 'M', s: a ? cap(imp) + ', Marcipor!' : 'Marcipor, ' + imp + '!', why: v[0] + '! = Befehl an EINEN  ·  Marcipor wird angeredet'}; }
+  if (r < .6) { const a = Math.random() < .5; return {k: 'P', s: a ? cap(imp) + ', Pseudole!' : 'Pseudole, ' + imp + '!', why: v[0] + '! = Befehl an EINEN  ·  Pseudole = Vokativ (Anrede) von Pseudolus'}; }
+  if (r < .85) { const pl = (z ? z : '') + v[0] + 'te', a = Math.random();
+    return {k: 'B', s: a < .4 ? cap(pl) + ', servi!' : a < .7 ? 'Servi, ' + pl + '!' : 'Marcipor et Pseudole, ' + pl + '!', why: v[0] + 'te! = Befehl an MEHRERE (Plural: -te)'}; }
+  const a = Math.random();
+  if (a < .35) return {k: 'N', s: (Math.random() < .5 ? 'Marcipor ' : 'Pseudolus ') + (z ? z : '') + v[1] + '.', why: v[1] + ' = er/sie … (3. Person) – das ist kein Befehl!'};
+  if (a < .7) return {k: 'N', s: 'Cur non ' + (z ? z : '') + v[2] + ', ' + (Math.random() < .5 ? 'Pseudole' : 'Marcipor') + '?', why: v[2] + ' = du … – eine Frage, kein Befehl!'};
+  return {k: 'N', s: 'Servi ' + (z ? z : '') + v[1].replace(/t$/, 'nt') + '.', why: 'Die Sklaven tun es schon (-nt) – kein Befehl!'};
+}
+let state = 'title', q, n, score, right, answered, tLeft, tMax, jumpM, jumpP, angry, t0, errs, combo;
+function next() {
+  if (n >= ROUND) { state = 'end'; t0 = performance.now(); K.musicOn = false; K.sfx.win(); K.best('l3BefehlBest', score); return; }
+  n++; let b; do { b = befehl(); } while (q && b.s === q.s); q = b; answered = null; tMax = Math.max(4.5, 8 - n * .2); tLeft = tMax;
+}
+function start() { n = 0; score = 0; right = 0; errs = []; combo = 0; jumpM = jumpP = angry = 0; q = null; state = 'play'; K.clearFx(); K.musicOn = true; K.music(...K.MEL.marsch, .15); next(); }
+function answer(k) {
+  if (state !== 'play' || answered) return;
+  answered = k;
+  if (k === q.k) {
+    right++; combo++; const pts = 10 + Math.round(tLeft / tMax * 10) + Math.min(combo - 1, 5) * 2; score += pts; K.sfx.right();
+    if (k === 'M' || k === 'B') { jumpM = .6; K.confetti(FIG.M.x, 300, 18); }
+    if (k === 'P' || k === 'B') { jumpP = .6; K.confetti(FIG.P.x, 300, 18); }
+    if (k === 'N') K.float(915, 250, 'Puh! Nichts zu tun!', '#1e9e57', 34);
+    K.float(W / 2, 250, K.pick(['Bene!', 'Optime!', 'Recte!']) + ' +' + pts, '#2ecc71', 40);
+    setTimeout(() => state === 'play' && next(), 1100);
+  } else {
+    combo = 0; angry = 1.5; errs.push(q); K.sfx.wrong();
+    setTimeout(() => state === 'play' && next(), 2600);
+  }
+}
+K.onTap = (x, y) => {
+  if (state === 'title') { start(); return; }
+  if (state === 'end') { if (performance.now() - t0 > 1200) start(); return; }
+  for (const b of BTN) if (K.hit(x, y, b)) return answer(b.k);
+  for (const [k, f] of Object.entries(FIG)) if (Math.abs(x - f.x) < 110 && y > 230 && y < GROUND) return answer(k);
+};
+K.onKey = e => {
+  if (state !== 'play') { if (['Space', 'Enter'].includes(e.code)) K.onTap(-1, -1); return; }
+  const i = '1234'.indexOf(e.key); if (i >= 0) answer(BTN[i].k);
+};
+K.loop((dt, t) => {
+  ctx.drawImage(IMG.bg, 210, 210, 780, 439, 0, 0, W, H);
+  ctx.fillStyle = 'rgba(255,240,210,.12)'; ctx.fillRect(0, 0, W, H);
+  if (state === 'play') { if (!answered) { tLeft -= dt; if (tLeft <= 0) { answered = 'zeit'; combo = 0; angry = 1.5; errs.push(q); K.sfx.honk(); setTimeout(() => state === 'play' && next(), 2600); } }
+    jumpM = Math.max(0, jumpM - dt); jumpP = Math.max(0, jumpP - dt); angry = Math.max(0, angry - dt); }
+  // Figuren
+  const shadow = (x) => { ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x, GROUND, 75, 14, 0, 0, Math.PI * 2); ctx.fill(); };
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(205, GROUND + 18, 110, 16, 0, 0, Math.PI * 2); ctx.fill(); shadow(FIG.M.x); shadow(FIG.P.x);
+  const shake = angry > 0 ? Math.sin(t * 50) * 6 : 0;
+  K.drawH(IMG.pom, 210 + shake, GROUND + 22, 370, false, angry > 0 ? 'saturate(1.6) hue-rotate(-12deg)' : null);
+  K.drawH(IMG.mar, FIG.M.x, GROUND - Math.sin(jumpM / .6 * Math.PI) * 90, 330, true);
+  K.drawH(IMG.pse, FIG.P.x, GROUND - Math.sin(jumpP / .6 * Math.PI) * 90, 330, true);
+  if (state === 'play') {
+    // Namensschilder
+    for (const f of Object.values(FIG)) { K.rr(f.x - 80, GROUND + 4, 160, 34, 17); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill(); K.text(f.name, f.x, GROUND + 22, 22, '#fff'); }
+    // Sprechblase
+    const bx = 330, by = 78, bw = 640, bh = 140;
+    K.rr(bx, by, bw, bh, 30); ctx.fillStyle = 'rgba(255,250,240,.97)'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = '#d4a017'; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx + 30, by + bh - 40); ctx.lineTo(265, 250); ctx.lineTo(bx + 30, by + bh - 90); ctx.closePath(); ctx.fillStyle = 'rgba(255,250,240,.97)'; ctx.fill();
+    K.text('Pomponius ruft:', bx + bw / 2, by + 26, 22, '#6b4f2a', {weight: 500});
+    K.text('„' + q.s + '“', bx + bw / 2, by + 72, K.fit('„' + q.s + '“', bw - 40, 44), '#7d0f1c');
+    if (answered && answered !== q.k) K.text(q.why, bx + bw / 2, by + 116, K.fit(q.why, bw - 30, 23), '#d62839');
+    else K.text('Wer muss jetzt etwas tun?', bx + bw / 2, by + 116, 23, '#3b2a1a', {weight: 500});
+    // Zeitbalken
+    K.rr(bx + 20, by + bh + 12, bw - 40, 14, 7); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fill();
+    K.rr(bx + 20, by + bh + 12, (bw - 40) * Math.max(0, tLeft / tMax), 14, 7); ctx.fillStyle = tLeft < 2 ? '#ff4d6d' : '#ffd23f'; ctx.fill();
+    // HUD
+    K.pill(72, 12, 220, 'Befehl ' + n + ' / ' + ROUND); K.pill(1000, 12, 140, score + ' P');
+    BTN.forEach((b, i) => K.button(b, b.label, !answered ? null : (b.k === q.k ? 'ok' : b.k === answered ? 'bad' : 'dim'), {size: 32}));
+    if (!K.focused()) K.text('Klicke ins Spiel, um zu spielen!', W / 2, 600, 26, '#fff', {stroke: '#000', sw: 6});
+  }
+  K.drawFx(dt);
+  if (state === 'title') {
+    K.panel(940, 590);
+    K.title('POMPONIUS BEFIEHLT', 130, 62);
+    K.text('Pomponius schimpft mit seinen Sklaven Marcipor und Pseudolus.', W / 2, 210, 28, '#3b2a1a', {weight: 500});
+    K.text('Wer muss jetzt etwas tun? Tippe:', W / 2, 270, 30, '#7d0f1c');
+    K.text('Marcipor  ·  Pseudolus  ·  beide  ·  kein Befehl', W / 2, 315, 30, '#1f4e8c');
+    K.text('Tipp 1: Labora! = an einen   ·   Laborate! = an mehrere', W / 2, 380, 26, '#3b2a1a');
+    K.text('Tipp 2: Die Anrede verrät, wer gemeint ist (Pseudole!).', W / 2, 420, 26, '#3b2a1a');
+    K.text('Tipp 3: Laborat. ist kein Befehl!', W / 2, 460, 26, '#3b2a1a');
+    K.blink('Tippe, um zu starten!', 560, 34);
+  }
+  if (state === 'end') {
+    K.panel(960, 580);
+    K.title(right >= ROUND - 2 ? 'OPTIME!' : right >= ROUND / 2 ? 'BENE!' : 'NOCH EINMAL!', 140, 66);
+    K.text(right + ' von ' + ROUND + ' Befehlen richtig  ·  ' + score + ' Punkte', W / 2, 225, 32, '#1f4e8c');
+    K.text('Rekord: ' + K.best('l3BefehlBest') + ' Punkte', W / 2, 270, 26, '#6b4f2a', {weight: 500});
+    if (errs.length) {
+      K.text('Schau dir diese noch einmal an:', W / 2, 330, 26, '#6b4f2a', {weight: 500});
+      errs.slice(-3).forEach((e, i) => K.text('„' + e.s + '“  →  ' + e.why, W / 2, 372 + i * 40, K.fit('„' + e.s + '“  →  ' + e.why, 900, 24), '#d62839'));
+    } else K.text('Kein einziger Fehler – Pomponius ist sprachlos!', W / 2, 360, 28, '#1e9e57');
+    K.blink('Tippe für eine neue Runde!', 560, 32);
+  }
+});
+window.__game = {start, answer, get q() { return q; }, get state() { return state; }};
+})();
+</script>
+</body></html>
