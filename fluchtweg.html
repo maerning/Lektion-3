@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Fluchtweg durch Rom – Lektion 3</title></head>
+<body><script src="kit.js"></script><script src="l3.js"></script>
+<script>
+(async () => {
+const {W, H, ctx} = K;
+const IMG = await K.load({bg:'img/gassen.jpg', davus:'img/davus.png', inc:'img/incitatus.png', wache:'img/wache.png'});
+const ARCH = [{x: 220}, {x: 640}, {x: 1059}];
+const SIGN_Y = 310, STEPS = 12, GROUND = 690;
+const IMP_DE = {vocare:['Ruf!','Ruft!'], laudare:['Lob!','Lobt!'], exspectare:['Warte!','Wartet!'], laborare:['Arbeite!','Arbeitet!'],
+  properare:['Beeil dich!','Beeilt euch!'], tacere:['Schweig!','Schweigt!'], videre:['Sieh!','Seht!'], sedere:['Sitz!','Sitzt!'],
+  audire:['Hör zu!','Hört zu!'], venire:['Komm!','Kommt!'], parere:['Gehorche!','Gehorcht!'], clamare:['Schrei!','Schreit!'], servare:['Rette!','Rettet!']};
+function aufgabe() {
+  const r = Math.random();
+  if (r < .22) { // Imperativ
+    const inf = L3.pick(Object.keys(IMP_DE)), v = L3.V.find(x => x[0] === inf), st = v[1], pl = Math.random() < .5;
+    const ok = pl ? st + 'te!' : st + '!';
+    const opts = pl ? [ok, st + '!', st + 'tis'] : [ok, st + 'te!', L3.form(v, 1)];
+    return {frage: (pl ? 'Befehl an mehrere: ' : 'Befehl an einen: ') + IMP_DE[inf][pl ? 1 : 0], ok, opts, info: pl ? 'Plural-Befehl = Stamm + -te' : 'Singular-Befehl = reiner Stamm'};
+  }
+  if (r < .37) { // esse
+    const p = Math.random() * 6 | 0, ok = L3.ESSE[p];
+    const others = L3.shuffle(L3.ESSE.filter(f => f !== ok)).slice(0, 2);
+    return {frage: L3.deutsch('esse', p), ok, opts: [ok, ...others], info: 'esse: sum, es, est, sumus, estis, sunt'};
+  }
+  const v = L3.pick(L3.V), p = Math.random() * 6 | 0, ok = L3.form(v, p);
+  let others = L3.shuffle([0, 1, 2, 3, 4, 5].filter(x => x !== p)).slice(0, 2).map(x => L3.form(v, x));
+  // typische Fallen
+  if (v[2] === 'a' && p === 0) others[0] = v[1] + 'o';
+  if (v[2] === 'i' && p === 5) others[0] = v[1] + 'nt';
+  return {frage: L3.deutsch(v, p), ok, opts: [ok, ...others], info: L3.form(v, p) + ' = ' + L3.deutsch(v, p)};
+}
+let state = 'title', q, opts, step, hearts, chosen, run, guard, t0, errs, startTime, fade;
+function next() { q = aufgabe(); opts = L3.shuffle(q.opts.slice()); chosen = null; run = 0; guard = null; }
+function start() { step = 0; hearts = 3; errs = []; fade = 0; state = 'play'; K.clearFx(); K.musicOn = true; K.music(...K.MEL.geheim, .17); next(); startTime = performance.now(); }
+function choose(i) {
+  if (state !== 'play' || chosen !== null) return;
+  chosen = i;
+  if (opts[i] === q.ok) {
+    K.sfx.right(); run = .001; step++;
+    setTimeout(() => {
+      if (step >= STEPS) { state = 'win'; t0 = performance.now(); K.musicOn = false; K.sfx.win(); K.confetti(W / 2, 300, 80); return; }
+      fade = 1; next();
+    }, 1300);
+  } else {
+    hearts--; errs.push(q); K.sfx.horn(); guard = {i, t: 0};
+    K.float(ARCH[i].x, 440, 'Halt! Eine Wache!', '#ff4d6d', 34);
+    setTimeout(() => {
+      if (hearts <= 0) { state = 'lost'; t0 = performance.now(); K.musicOn = false; return; }
+      chosen = null; guard = null; opts[i] = null;
+    }, 2200);
+  }
+}
+K.onTap = (x, y) => {
+  if (state === 'title') { start(); return; }
+  if (state !== 'play') { if (performance.now() - t0 > 1200) start(); return; }
+  ARCH.forEach((a, i) => { if (opts[i] && Math.abs(x - a.x) < 170 && y > 150 && y < 560) choose(i); });
+};
+K.onKey = e => {
+  if (state !== 'play') { if (['Space', 'Enter'].includes(e.code)) K.onTap(-1, -1); return; }
+  const i = '123'.indexOf(e.key); if (i >= 0 && opts[i]) choose(i);
+};
+function sign(x, y, txt, st) {
+  const w = Math.max(200, K.fit(txt, 260, 38) * txt.length * .55 + 50);
+  ctx.save(); ctx.translate(x, y);
+  ctx.strokeStyle = '#5a3a1a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-60, -70); ctx.lineTo(-60, -30); ctx.moveTo(60, -70); ctx.lineTo(60, -30); ctx.stroke();
+  K.rr(-145, -35, 290, 74, 14);
+  ctx.fillStyle = st === 'ok' ? '#b8f5c8' : st === 'bad' ? '#ffc4cc' : '#f6deb0'; ctx.fill();
+  ctx.lineWidth = 6; ctx.strokeStyle = st === 'ok' ? '#1e9e57' : st === 'bad' ? '#d62839' : '#8b5a2b'; ctx.stroke();
+  // Möhre als Wegweiser
+  ctx.fillStyle = '#ff8c1a'; ctx.beginPath(); ctx.moveTo(-137, -2); ctx.lineTo(-113, -12); ctx.lineTo(-113, 8); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#3caa3c'; ctx.fillRect(-113, -6, 7, 8);
+  K.text(txt, 12, 3, K.fit(txt, 220, 40), '#3b2a1a');
+  ctx.restore();
+}
+K.loop((dt, t) => {
+  ctx.drawImage(IMG.bg, 0, 0, W, H);
+  if (state === 'play') {
+    if (guard) { guard.t += dt; const a = ARCH[guard.i]; const s = Math.min(1, guard.t * 3);
+      ctx.save(); ctx.globalAlpha = s; K.drawH(IMG.wache, a.x, 535, 270 * (.8 + .2 * s)); ctx.restore(); }
+    // Wegweiser
+    ARCH.forEach((a, i) => { if (opts[i]) sign(a.x, SIGN_Y + Math.sin(t * 2 + i) * 3, opts[i], chosen === i ? (opts[i] === q.ok ? 'ok' : 'bad') : null); });
+  }
+  // Davus und Incitatus
+  let cx = W / 2 + 40, sc = 1, al = 1;
+  if (state === 'play' && run > 0) { run += dt; const k = Math.min(1, run / 1.1); cx = cx + (ARCH[chosen].x - cx) * k; sc = 1 - .55 * k; al = 1 - Math.max(0, (k - .6) / .4); }
+  ctx.save(); ctx.globalAlpha = al;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(cx, GROUND - (1 - sc) * 160, 150 * sc, 16 * sc, 0, 0, Math.PI * 2); ctx.fill();
+  const by = GROUND - (1 - sc) * 160, bob = run > 0 ? Math.abs(Math.sin(t * 14)) * 8 : 0;
+  K.drawH(IMG.inc, cx + 60 * sc, by - bob, 200 * sc);
+  K.drawH(IMG.davus, cx - 90 * sc, by - bob, 210 * sc, true);
+  ctx.restore();
+  if (fade > 0) { fade = Math.max(0, fade - dt * 2.5); ctx.fillStyle = `rgba(10,10,40,${fade})`; ctx.fillRect(0, 0, W, H); }
+  if (state === 'play') {
+    // Frage-Banner
+    const g = ctx.createLinearGradient(0, 72, 0, 140); g.addColorStop(0, '#b3202f'); g.addColorStop(1, '#7d0f1c');
+    K.rr(290, 72, 700, 74, 22); ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = '#ffd23f'; ctx.stroke();
+    const f = 'Welche Gasse heißt:  „' + q.frage + '“ ?';
+    K.text(f, W / 2, 110, K.fit(f, 660, 34), '#fff');
+    if (chosen !== null && opts[chosen] !== q.ok) K.text('Richtig wäre: ' + q.ok + '  ·  ' + q.info, W / 2, 168, K.fit('Richtig wäre: ' + q.ok + '  ·  ' + q.info, 900, 26), '#ffd23f', {stroke: '#000', sw: 6});
+    // HUD
+    K.rr(72, 12, 250, 50, 25); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill();
+    for (let i = 0; i < 3; i++) K.heart(100 + i * 40, 38, i < hearts);
+    K.text(step + ' / ' + STEPS, 262, 38, 24, '#ffd23f');
+    // Fortschritt zur Freiheit
+    K.rr(820, 18, 300, 22, 11); ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fill();
+    K.rr(820, 18, 300 * step / STEPS, 22, 11); ctx.fillStyle = '#7ae582'; ctx.fill();
+    K.text('Freiheit!', 1070, 54, 18, '#fff', {stroke: '#000', sw: 4});
+    if (!K.focused()) K.text('Klicke ins Spiel, um zu spielen!', W / 2, 600, 26, '#fff', {stroke: '#000', sw: 6});
+  }
+  K.drawFx(dt);
+  if (state === 'title') {
+    K.panel(940, 580);
+    K.title('FLUCHTWEG DURCH ROM', 130, 60);
+    K.text('Davus bringt Incitatus heimlich in Sicherheit – mitten in der Nacht!', W / 2, 210, 27, '#3b2a1a', {weight: 500});
+    K.text('An jeder Kreuzung zeigen Möhren-Schilder den Weg.', W / 2, 250, 27, '#3b2a1a', {weight: 500});
+    K.text('Nur die Gasse mit der richtigen lateinischen Form ist sicher.', W / 2, 300, 28, '#7d0f1c');
+    K.text('Beispiel:  „wir warten“  →  exspectamus', W / 2, 360, 30, '#1f4e8c');
+    K.text('In den falschen Gassen warten die Wachen!', W / 2, 420, 26, '#d62839');
+    K.text('12 Kreuzungen bis in die Freiheit · 3 Herzen', W / 2, 460, 24, '#6b4f2a', {weight: 500});
+    K.blink('Tippe, um zu starten!', 555, 34);
+  }
+  if (state === 'win' || state === 'lost') {
+    const win = state === 'win';
+    K.panel(940, 560);
+    K.title(win ? 'INCITATUS IST FREI!' : 'GEFANGEN!', 150, 60, win ? '#ffd23f' : '#ff8a8a');
+    if (win) {
+      const sec = Math.round((performance.now() - startTime) / 1000);
+      K.text('Ihr habt alle Wachen ausgetrickst. Io!', W / 2, 240, 30, '#3b2a1a');
+      K.text('Zeit: ' + sec + ' s   ·   Fehler: ' + errs.length, W / 2, 295, 30, '#1f4e8c');
+    } else K.text('Die Wachen haben euch erwischt. Versucht es noch einmal!', W / 2, 240, 29, '#3b2a1a');
+    if (errs.length) {
+      K.text('Übe noch einmal:', W / 2, 365, 26, '#6b4f2a', {weight: 500});
+      const e = errs.slice(-3).map(q => q.frage + ' = ' + q.ok).join('   ·   ');
+      K.text(e, W / 2, 405, K.fit(e, 880, 28), '#d62839');
+    }
+    K.blink('Tippe für eine neue Runde!', 545, 32);
+  }
+});
+window.__game = {start, choose, get opts() { return opts; }, get q() { return q; }, get state() { return state; }};
+})();
+</script>
+</body></html>
